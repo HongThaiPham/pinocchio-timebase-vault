@@ -4,11 +4,12 @@ use pinocchio::{
     account_info::AccountInfo,
     instruction::{Seed, Signer},
     program_error::ProgramError,
-    sysvars::{rent::Rent, Sysvar},
+    sysvars::{clock::Clock, rent::Rent, Sysvar},
     ProgramResult,
 };
 
 use crate::{
+    errors::TimeBaseVaultError,
     states::Vault,
     utils::{load_acc_mut_unchecked, DataLen},
 };
@@ -94,6 +95,16 @@ impl<'info> InitializeSolVault<'info> {
     pub const DISCRIMINATOR: &'info u8 = &0;
 
     pub fn process(&mut self) -> ProgramResult {
+        let current_timestamp = Clock::get()?.unix_timestamp;
+        let unlock_timestamp = self.instruction_data.unlock_timestamp;
+        let amount = self.instruction_data.amount;
+        if unlock_timestamp.lt(&current_timestamp) {
+            return Err(TimeBaseVaultError::UnlockTimestampMustBeInFuture.into());
+        }
+        if amount.eq(&0) {
+            return Err(TimeBaseVaultError::AmountMustBeGreaterThanZero.into());
+        }
+
         Vault::validate_pda(
             self.accounts.vault.key(),
             self.accounts.signer.key(),
@@ -104,10 +115,10 @@ impl<'info> InitializeSolVault<'info> {
         )?;
 
         {
-            // create and init airdrop state account
+            // create and init vault account
             let bump_binding = [self.instruction_data.bump];
-            let amount_bytes = self.instruction_data.amount.to_le_bytes();
-            let unlock_timestamp_bytes = self.instruction_data.unlock_timestamp.to_le_bytes();
+            let amount_bytes = amount.to_le_bytes();
+            let unlock_timestamp_bytes = unlock_timestamp.to_le_bytes();
             let seed = [
                 Seed::from(Vault::SEED),
                 Seed::from(self.accounts.signer.key()),

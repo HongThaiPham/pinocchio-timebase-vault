@@ -1,10 +1,9 @@
 use pinocchio::{
     program_error::ProgramError,
     pubkey::{self, Pubkey},
-    sysvars::{clock::Clock, Sysvar},
 };
 
-use crate::{errors::TimeBaseVaultError, utils::DataLen};
+use crate::utils::DataLen;
 
 #[repr(C)]
 pub struct Vault {
@@ -66,28 +65,5 @@ impl Vault {
         }
 
         Ok(())
-    }
-
-    pub fn new(
-        owner: Pubkey,
-        amount: [u8; 8],
-        bump: [u8; 1],
-        unlock_timestamp: [u8; 8],
-        mint: Option<Pubkey>,
-    ) -> Result<Self, ProgramError> {
-        let current_timestamp = Clock::get().unwrap().unix_timestamp;
-        if i64::from_le_bytes(unlock_timestamp).lt(&current_timestamp) {
-            return Err(TimeBaseVaultError::UnlockTimestampMustBeInFuture.into());
-        }
-        if u64::from_le_bytes(amount).eq(&0) {
-            return Err(TimeBaseVaultError::AmountMustBeGreaterThanZero.into());
-        }
-        Ok(Self {
-            owner,
-            amount,
-            bump,
-            unlock_timestamp,
-            mint,
-        })
     }
 }
