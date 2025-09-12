@@ -4,7 +4,7 @@ use pinocchio::program_error::ProgramError;
 pub enum TimeBaseVaultError {
     UnlockTimestampMustBeInFuture,
     AmountMustBeGreaterThanZero,
-    VaultLocked,
+    Unauthorized,
     VaultLocking,
     InvalidVaultMint,
 }

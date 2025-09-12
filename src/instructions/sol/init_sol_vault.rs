@@ -27,6 +27,10 @@ impl<'info> TryFrom<&'info [AccountInfo]> for InitializeSolVaultAccounts<'info> 
             return Err(ProgramError::NotEnoughAccountKeys);
         };
 
+        if !signer.is_signer() {
+            return Err(ProgramError::MissingRequiredSignature);
+        }
+
         // verify vault account
         if !vault.is_writable() {
             return Err(ProgramError::InvalidAccountData);
