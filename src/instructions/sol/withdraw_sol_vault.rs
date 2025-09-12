@@ -62,15 +62,12 @@ impl<'info> WithdrawSolVault<'info> {
         let vault =
             unsafe { load_acc_unchecked::<Vault>(self.accounts.vault.borrow_data_unchecked()) }?;
 
-        let unlock_timestamp = i64::from_be_bytes(vault.unlock_timestamp);
-        // let amount = u64::from_le_bytes(vault.amount);
-        // let bump = vault.bump;
-        if unlock_timestamp.lt(&current_timestamp) {
-            return Err(TimeBaseVaultError::VaultLocking.into());
-        }
-
+        let unlock_timestamp = i64::from_le_bytes(vault.unlock_timestamp);
         if vault.owner.ne(self.accounts.signer.key()) {
             return Err(TimeBaseVaultError::Unauthorized.into());
+        }
+        if unlock_timestamp.gt(&current_timestamp) {
+            return Err(TimeBaseVaultError::VaultLocking.into());
         }
 
         // close vault account and transfer all lamports to signer

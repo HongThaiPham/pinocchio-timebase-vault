@@ -22,7 +22,8 @@ mod tests_timebase_vault {
     pub const PROGRAM_ID: Pubkey = Pubkey::new_from_array(ID);
 
     fn get_mollusk() -> Mollusk {
-        let mollusk = Mollusk::new(&PROGRAM_ID, "target/deploy/pinocchio_timebase_vault");
+        let mut mollusk = Mollusk::new(&PROGRAM_ID, "target/deploy/pinocchio_timebase_vault");
+        mollusk.sysvars.clock.unix_timestamp = 1757633343;
         mollusk
     }
 
@@ -92,6 +93,75 @@ mod tests_timebase_vault {
     }
     #[test]
     fn withdraw_sol_vault_successfully() {
+        let mut mollusk = get_mollusk();
+
+        let (system_program, _) = mollusk_svm::program::keyed_account_for_system_program();
+
+        let maker = Pubkey::new_from_array([0x02; 32]);
+        let maker_account = Account::new(10 * LAMPORTS_PER_SOL, 0, &system_program);
+
+        let amount = 2 * LAMPORTS_PER_SOL;
+        let unlock_timestamp = mollusk.sysvars.clock.unix_timestamp + 3600;
+
+        println!("unlock_timestamp: {}", unlock_timestamp);
+
+        let (vault_address, bump) = Pubkey::find_program_address(
+            &[
+                Vault::SEED,
+                maker.as_ref(),
+                &amount.to_le_bytes(),
+                &unlock_timestamp.to_le_bytes(),
+            ],
+            &PROGRAM_ID,
+        );
+
+        let lamport_for_rent = mollusk.sysvars.rent.minimum_balance(Vault::LEN);
+
+        let vault_account_data = Vault {
+            owner: maker.to_bytes(),
+            amount: amount.to_le_bytes(),
+            unlock_timestamp: unlock_timestamp.to_le_bytes(),
+            mint: None,
+            bump: [bump],
+        };
+
+        let mut vault_account =
+            AccountSharedData::new(lamport_for_rent + amount, Vault::LEN, &PROGRAM_ID);
+
+        vault_account.set_data_from_slice(unsafe { to_bytes::<Vault>(&vault_account_data) });
+
+        let data = vec![WithdrawSolVault::DISCRIMINATOR.clone()];
+
+        let instruction = Instruction::new_with_bytes(
+            PROGRAM_ID,
+            &data,
+            vec![
+                AccountMeta::new(maker, true),
+                AccountMeta::new(vault_address, false),
+            ],
+        );
+
+        mollusk.sysvars.clock.unix_timestamp = unlock_timestamp + 100;
+        println!(
+            "mollusk.sysvars.clock.unix_timestamp: {}",
+            mollusk.sysvars.clock.unix_timestamp
+        );
+
+        let _: mollusk_svm::result::InstructionResult = mollusk.process_and_validate_instruction(
+            &instruction,
+            &[
+                (maker, maker_account),
+                (vault_address, vault_account.into()),
+            ],
+            &[
+                Check::success(),
+                Check::account(&vault_address).closed().build(),
+            ],
+        );
+    }
+
+    #[test]
+    fn withdraw_sol_vault_fail_with_vault_locking() {
         let mollusk = get_mollusk();
 
         let (system_program, _) = mollusk_svm::program::keyed_account_for_system_program();
@@ -147,8 +217,11 @@ mod tests_timebase_vault {
                 (vault_address, vault_account.into()),
             ],
             &[
-                Check::success(),
-                Check::account(&vault_address).closed().build(),
+                Check::err(ProgramError::Custom(3)), // VaultLocking
+                Check::account(&vault_address).owner(&PROGRAM_ID).build(),
+                Check::account(&vault_address)
+                    .lamports(amount + lamport_for_rent)
+                    .build(),
             ],
         );
     }
