@@ -2,7 +2,9 @@ use pinocchio::{
     account_info::AccountInfo, program_error::ProgramError, pubkey::Pubkey, ProgramResult,
 };
 
-use crate::instructions::{InitializeSolVault, WithdrawSolVault};
+use crate::instructions::{
+    InitializeSolVault, InitializeSplVault, WithdrawSolVault, WithdrawSplVault,
+};
 
 pub fn process_instruction(
     _program_id: &Pubkey,
@@ -15,6 +17,12 @@ pub fn process_instruction(
         }
         Some((WithdrawSolVault::DISCRIMINATOR, data)) => {
             WithdrawSolVault::try_from((data, accounts))?.process()
+        }
+        Some((InitializeSplVault::DISCRIMINATOR, data)) => {
+            InitializeSplVault::try_from((data, accounts))?.process()
+        }
+        Some((WithdrawSplVault::DISCRIMINATOR, data)) => {
+            WithdrawSplVault::try_from((data, accounts))?.process()
         }
         _ => Err(ProgramError::InvalidInstructionData),
     }
